@@ -126,7 +126,16 @@ async def get_messages():
 	try:
 		conn = db_pool.get_connection()
 		cursor = conn.cursor(dictionary=True)
-		cursor.execute("SELECT nickname, message AS text FROM messages ORDER BY id DESC LIMIT 100")
+		cursor.execute('''
+			SELECT nickname, text
+			FROM (
+				SELECT nickname, message AS text
+				FROM messages
+				ORDER BY id DESC
+				LIMIT 100
+			) AS sub
+			ORDER BY id ASC;
+		''')
 		rows = cursor.fetchall()
 		for row in rows:
 			msg = Message(nickname=row["nickname"], text=row["text"])
