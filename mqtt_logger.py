@@ -11,6 +11,11 @@ import paho.mqtt.client as mqtt
 import mysql.connector 
 import os
 from mysql.connector import pooling 
+from fastapi import FastAPI
+from pydantic import BaseModel
+from collections import deque
+from typing import List
+import time
 
 mysql_user = os.getenv("MYSQL_USER");
 mysql_password = os.getenv("MYSQL_PASSWORD");
@@ -107,6 +112,27 @@ def main():
 	except KeyboardInterrupt: 
 		logger.info("Sammutetaan...") 
 		client.disconnect()
+
+app = FastAPI()
+
+# store up to 50 messages in memory
+messages = deque(maxlen=50)
+
+class Message(BaseModel):
+    nickname: str
+    text: str
+    timestamp: float | None = None
+
+@app.get("/messages", response_model=List[Message])
+async def get_messages():
+    return list(messages)
+
+@app.post("/messages")
+async def add_message(msg: Message):
+    if msg.timestamp is None:
+        msg.timestamp = time.time()
+    messages.append(msg)
+    return {"status": "ok"}
 
 if __name__ == "__main__":
 	main()
