@@ -25,7 +25,7 @@ fi
 
 if [ -f "mqtt_logger.py" ]; then 
 	echo "Suoritetaan mqtt_logger.py..." 
-	uvicorn mqtt_logger:app --host 0.0.0.0 --port 1213
+	uvicorn main:app --host 0.0.0.0 --port 1213
 else 
 	echo "mqtt_logger.py ei löytynyt!" 
 fi 
