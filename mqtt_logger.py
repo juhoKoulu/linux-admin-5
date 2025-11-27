@@ -56,11 +56,6 @@ def save_message(nickname, message, client_id):
 		cursor.execute(query, (nickname, message, client_id)) 
 		conn.commit() 
 
-		msg = Message();
-		msg.text = message;
-		msg.nickname = nickname;
-		messages.append(msg)
-
 		logger.info(f"Tallennettu: [{nickname}] {message[:50]}...") 
 	except mysql.connector.Error as err: 
 		logger.error(f"Tietokantavirhe: {err}") 
@@ -117,8 +112,7 @@ def main():
 		logger.info("Sammutetaan...") 
 		client.disconnect()
 
-if __name__ == "__main__":
-	main()
+main()
 
 app = FastAPI()
 
