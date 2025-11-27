@@ -5,6 +5,7 @@ Kuuntelee MQTT-viestejä ja tallentaa ne tietokantaan.
 """ 
  
 import json 
+from pydantic import BaseModel
 import logging 
 import paho.mqtt.client as mqtt 
 import mysql.connector 
@@ -121,7 +122,7 @@ if __name__ == "__main__":
 
 app = FastAPI()
 
-class Message:
+class Message(BaseModel):
 	nickname: str
 	text: str
 
