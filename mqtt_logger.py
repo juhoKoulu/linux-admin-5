@@ -129,7 +129,9 @@ async def get_messages():
 		cursor.execute("SELECT nickname, message AS text FROM messages ORDER BY id DESC LIMIT 100")
 		rows = cursor.fetchall()
 		for row in rows:
-			msg = Message(row["nickname"], row["text"])
+			msg = Message()
+			msg.nickname = row["nickname"]
+			msg.text = row["text"]
 			messages_list.append(msg)
 	except mysql.connector.Error as err:
 		logger.error(f"Tietokantavirhe: {err}")
