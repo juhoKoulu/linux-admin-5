@@ -108,10 +108,13 @@ def main():
 	 
 	try: 
 		client.connect(MQTT_BROKER, MQTT_PORT, 60) 
-		client.loop_forever() 
+		client.loop_start() 
 	except KeyboardInterrupt: 
 		logger.info("Sammutetaan...") 
 		client.disconnect()
+
+if __name__ == "__main__":
+	main()
 
 app = FastAPI()
 
@@ -134,5 +137,3 @@ async def add_message(msg: Message):
     messages.append(msg)
     return {"status": "ok"}
 
-if __name__ == "__main__":
-	main()
