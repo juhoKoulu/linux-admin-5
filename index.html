@@ -257,6 +257,29 @@
                 addMessage('Tuntematon', message.toString(), false);
             }
         });
+
+
+		async function loadPastMessages() {
+			try {
+				const response = await fetch('/messages');
+				if (!response.ok) throw new Error('Failed to fetch messages');
+
+				const messages = await response.json();
+				messagesDiv.innerHTML = ''; // Clear system message
+				messages.forEach(msg => {
+					addMessage(msg.nickname, msg.text, false);
+				});
+			} catch (err) {
+				console.error('Error loading past messages:', err);
+				addSystemMessage('Viestien lataus epäonnistui.');
+			}
+		}
+
+
+		// Load messages when the page is ready
+		window.addEventListener('DOMContentLoaded', () => {
+			loadPastMessages();
+		});
         
         function addMessage(nickname, text, isOwn) {
             const messageDiv = document.createElement('div');
