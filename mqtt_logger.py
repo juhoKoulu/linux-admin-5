@@ -6,16 +6,13 @@ Kuuntelee MQTT-viestejä ja tallentaa ne tietokantaan.
  
 import json 
 import logging 
-from datetime import datetime 
 import paho.mqtt.client as mqtt 
 import mysql.connector 
 import os
 from mysql.connector import pooling 
 from fastapi import FastAPI
-from pydantic import BaseModel
 from collections import deque
 from typing import List
-import time
 
 mysql_user = os.getenv("MYSQL_USER");
 mysql_password = os.getenv("MYSQL_PASSWORD");
@@ -31,7 +28,7 @@ DB_CONFIG = {
 	"password": mysql_password,
 	"database": "mqtt_chat" 
 } 
- 
+
 # Lokitus 
 logging.basicConfig( 
 	level=logging.INFO, 
@@ -57,6 +54,12 @@ def save_message(nickname, message, client_id):
 		''' 
 		cursor.execute(query, (nickname, message, client_id)) 
 		conn.commit() 
+
+		msg = Message();
+		msg.text = message;
+		msg.nickname = nickname;
+		messages.append(msg)
+
 		logger.info(f"Tallennettu: [{nickname}] {message[:50]}...") 
 	except mysql.connector.Error as err: 
 		logger.error(f"Tietokantavirhe: {err}") 
@@ -118,22 +121,27 @@ if __name__ == "__main__":
 
 app = FastAPI()
 
-# store up to 50 messages in memory
-messages = deque(maxlen=50)
-
-class Message(BaseModel):
-    nickname: str
-    text: str
-    timestamp: float | None = None
+class Message:
+	nickname: str
+	text: str
 
 @app.get("/messages", response_model=List[Message])
 async def get_messages():
-    return list(messages)
+	messages_list = []
+	try:
+		conn = db_pool.get_connection()
+		cursor = conn.cursor(dictionary=True)
+		cursor.execute("SELECT nickname, message AS text FROM messages ORDER BY id DESC LIMIT 100")
+		rows = cursor.fetchall()
+		for row in rows:
+			msg = Message()
+			msg.nickname = row["nickname"]
+			msg.text = row["text"]
+			messages_list.append(msg)
+	except mysql.connector.Error as err:
+		logger.error(f"Tietokantavirhe: {err}")
+	finally:
+		if cursor: cursor.close()
+		if conn: conn.close()
 
-@app.post("/messages")
-async def add_message(msg: Message):
-    if msg.timestamp is None:
-        msg.timestamp = time.time()
-    messages.append(msg)
-    return {"status": "ok"}
-
+	return messages_list
