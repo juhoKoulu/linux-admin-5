@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT Chat</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .chat-container {
+            width: 100%;
+            max-width: 600px;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff6b6b;
+            transition: background 0.3s;
+        }
+        
+        .status-dot.connected {
+            background: #51cf66;
+            box-shadow: 0 0 10px #51cf66;
+        }
+        
+        .chat-header h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .messages {
+            height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        
+        .message {
+            margin-bottom: 12px;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message.own {
+            text-align: right;
+        }
+        
+        .message-bubble {
+            display: inline-block;
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            background: #e9ecef;
+            color: #333;
+        }
+        
+        .message.own .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .message-meta {
+            font-size: 0.75rem;
+            color: #868e96;
+            margin-top: 4px;
+        }
+        
+        .message.own .message-meta {
+            color: #adb5bd;
+        }
+        
+        .input-area {
+            display: flex;
+            padding: 20px;
+            gap: 12px;
+            background: #fff;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .nickname-input {
+            width: 120px;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            transition: border-color 0.3s;
+        }
+        
+        .nickname-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .message-input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            transition: border-color 0.3s;
+        }
+        
+        .message-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .send-btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .system-message {
+            text-align: center;
+            color: #868e96;
+            font-size: 0.85rem;
+            padding: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="status-dot" id="statusDot"></div>
+            <h1>MQTT Chat</h1>
+        </div>
+        
+        <div class="messages" id="messages">
+            <div class="system-message">Yhdistetään palvelimeen...</div>
+        </div>
+        
+        <div class="input-area">
+            <input type="text" 
+                   class="nickname-input" 
+                   id="nickname" 
+                   placeholder="Nimimerkki"
+                   maxlength="20">
+            <input type="text" 
+                   class="message-input" 
+                   id="messageInput" 
+                   placeholder="Kirjoita viesti..."
+                   disabled>
+            <button class="send-btn" id="sendBtn" disabled>Lähetä</button>
+        </div>
+    </div>
+
+    <script>
+        const TOPIC = 'chat/messages';
+        
+        // Yhdistä MQTT brokeriin WebSocketin kautta
+        const wsUrl = `ws://${window.location.hostname}:9001/mqtt`;
+        const client = mqtt.connect(wsUrl, {
+            clientId: 'web_' + Math.random().toString(16).substr(2, 8),
+            clean: true,
+            reconnectPeriod: 3000
+        });
+        
+        const messagesDiv = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const nicknameInput = document.getElementById('nickname');
+        const sendBtn = document.getElementById('sendBtn');
+        const statusDot = document.getElementById('statusDot');
+        
+        // Lataa nimimerkki localStoragesta
+        nicknameInput.value = localStorage.getItem('mqtt_nickname') || '';
+        
+        nicknameInput.addEventListener('change', () => {
+            localStorage.setItem('mqtt_nickname', nicknameInput.value);
+        });
+        
+        client.on('connect', () => {
+            console.log('Yhdistetty MQTT brokeriin');
+            statusDot.classList.add('connected');
+            messageInput.disabled = false;
+            sendBtn.disabled = false;
+            
+            addSystemMessage('Yhdistetty chat-palvelimeen!');
+            
+            // Tilaa chat-viestit
+            client.subscribe(TOPIC, (err) => {
+                if (err) {
+                    console.error('Tilausvirhe:', err);
+                }
+            });
+        });
+        
+        client.on('disconnect', () => {
+            statusDot.classList.remove('connected');
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+            addSystemMessage('Yhteys katkesi...');
+        });
+        
+        client.on('error', (err) => {
+            console.error('MQTT virhe:', err);
+            addSystemMessage('Yhteysvirhe: ' + err.message);
+        });
+        
+        client.on('message', (topic, message) => {
+            try {
+                const data = JSON.parse(message.toString());
+                addMessage(data.nickname, data.text, data.clientId === client.options.clientId);
+            } catch (e) {
+                // Jos viesti ei ole JSON, näytä sellaisenaan
+                addMessage('Tuntematon', message.toString(), false);
+            }
+        });
+        
+        function addMessage(nickname, text, isOwn) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message' + (isOwn ? ' own' : '');
+            
+            const time = new Date().toLocaleTimeString('fi-FI', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            messageDiv.innerHTML = `
+                <div class="message-bubble">${escapeHtml(text)}</div>
+                <div class="message-meta">${escapeHtml(nickname)} • ${time}</div>
+            `;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        function addSystemMessage(text) {
+            const div = document.createElement('div');
+            div.className = 'system-message';
+            div.textContent = text;
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function sendMessage() {
+            const text = messageInput.value.trim();
+            const nickname = nicknameInput.value.trim() || 'Anonyymi';
+            
+            if (text && client.connected) {
+                const payload = JSON.stringify({
+                    nickname: nickname,
+                    text: text,
+                    clientId: client.options.clientId,
+                    timestamp: Date.now()
+                });
+                
+                client.publish(TOPIC, payload);
+                messageInput.value = '';
+            }
+        }
+        
+        sendBtn.addEventListener('click', sendMessage);
+        
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
